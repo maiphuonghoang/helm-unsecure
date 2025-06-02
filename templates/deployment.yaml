@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insecure-deployment
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: insecure
+  template:
+    metadata:
+      labels:
+        app: insecure
+    spec:
+      hostNetwork: true                         # ❌ Exposes container to host network
+      dnsPolicy: ClusterFirstWithHostNet        # ❌ Uses host DNS policy
+      containers:
+        - name: nginx
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"  # ❌ Might be :latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+              hostPort: 80                      # ❌ Uses host port
+          env:
+            - name: SECRET_KEY
+              value: "hardcoded_super_secret"   # ❌ Hardcoded secret
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: missing-secret          # ❌ Refers to non-existing secret
+                  key: password
+          resources:                            # ❌ No proper limits
+            requests:
+              cpu: "0"
+              memory: "0"
+            limits:
+              cpu: "0"
+              memory: "0"
+          securityContext:
+            privileged: true                    # ❌ Full privileges
+            allowPrivilegeEscalation: true      # ❌ Escalation allowed
+            runAsUser: 0                        # ❌ Runs as root
+            readOnlyRootFilesystem: false       # ❌ Writable filesystem
+            runAsNonRoot: false                 # ❌ Explicitly allows root
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock   # ❌ Mounts Docker socket
+            - name: etc-passwd
+              mountPath: /etc/passwd            # ❌ Mounts sensitive file
+              readOnly: false
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+        - name: etc-passwd
+          hostPath:
+            path: /etc/passwd                   # ❌ Dangerous mount
